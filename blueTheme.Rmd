@@ -1,0 +1,66 @@
+---
+title: "Thème bleu"
+output: html_notebook
+autor : "inspiré du travail de Emanuela Furfaro (disponible ne ligne  : https://emanuelaf.github.io/own-ggplot-theme.html" 
+---
+
+```{r}
+library(ggplot2)
+library(forcats)
+library(tidyverse)
+library(magick)
+library(readr)
+library(formattable) 
+```
+
+
+```{r}
+blue_theme <- function() {
+  theme(
+    # add border
+    panel.border = element_rect(colour = "blue", fill = NA, linetype = 2),
+    # color background
+    panel.background = element_rect(fill = "aliceblue"),
+    # modify grid
+    panel.grid.major.x = element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y =  element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.y = element_blank(),
+    # modify text, axis and colour
+    axis.text = element_text(colour = "steelblue", face = "italic"),
+    axis.title = element_text(colour = "steelblue"),
+    axis.ticks = element_line(colour = "steelblue"),
+    # text elements
+    plot.title = element_text(size = 16, face = 'bold', hjust = 0, vjust = 2, color="steelblue"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 9, hjust = 1),
+    # legend at the bottom
+    legend.position = "bottom"
+  )
+}
+
+```
+
+
+```{r}
+data(iris)
+
+ggplot(iris, aes(x = Petal.Length)) +
+  geom_histogram() 
+```
+
+```{r}
+#récupération logo-image
+logo <- image_read("duda_logo1.jpg")
+ggplot(iris, aes(x = Petal.Length)) +
+  geom_histogram(fill = "steelblue", col = "steelblue4") +
+  labs(x = "Length of Service", 
+       y = "Total Employees", 
+       title = "Number of United Nations employees \nby length of service",
+       caption = "Source: UN Chief Executive Board \nHuman Resource Statistics,\n2017 | Madeline Pickens") +
+  blue_theme()
+
+#adding the logo
+grid::grid.raster(logo, x = 0.09, y = 0, just = c('left', 'bottom'), width = unit(0.5, 'inches'))
+```
+

@@ -1,0 +1,264 @@
+---
+title: "Manipulation et prétraitement de données - UE1"
+subtitle: "Première manipulation d'un jeu de données (exercice n°1)"
+author: "Francisco Martin-Gomez"
+date: "juillet-août 2023"
+output:
+  html_document:
+    df_print: paged
+  theme: blue_theme
+  highlight: monochrome
+  toc: TRUE  # faire apparaître une TOC
+  toc_float:   
+      collapsed: false
+      smooth_scroll: false
+  toc_depth : 4 # profondeur de la table TOC
+  code_folding : hide  # cache par défaut les scripts R
+  number_sections : true # attribue un numéro aux chapitres et sections
+---
+
+## Environnement de travail
+
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(ggpubr)
+library(cowplot)
+library(readr)
+```
+
+Pour réaliser cet exercice, les packages suivants ont été utilisés (le numéro de la version est entre parenthèse): ggplot2 (`r packageVersion("ggplot2")`), dplyr (`r packageVersion("dplyr")`), grid (`r packageVersion("grid")`), gridExtra (`r packageVersion("gridExtra")`), ggpubr (`r packageVersion("ggpubr")`), cowplot (`r packageVersion("cowplot")`), readr (`r packageVersion("readr")`).
+
+```{r}
+blue_theme <- function() {
+  theme(
+    # add border
+    panel.border = element_rect(colour = "blue", fill = NA, linetype = 2),
+    # color background
+    panel.background = element_rect(fill = "aliceblue"),
+    # modify grid
+    panel.grid.major.x = element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y =  element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.y = element_blank(),
+    # modify text, axis and colour
+    axis.text = element_text(colour = "steelblue", face = "italic"),
+    axis.title = element_text(colour = "steelblue"),
+    axis.ticks = element_line(colour = "steelblue"),
+    # text elements
+    plot.title = element_text(size = 14, colour = "steelblue", face = 'bold', hjust = 0, vjust = 2),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 9, hjust = 1),
+    # legend at the bottom
+    legend.position = "bottom"
+  )
+}
+
+```
+
+
+## 1. DATASET
+
+### Importation du dataset
+
+```{r}
+df1 <- read.csv("age_gender.csv", header = TRUE, sep = ";")
+```
+
+
+### Présentation du dataset
+
+Le jeu de données `age_gender` propose deux variables (age et genre), toutes deux de type entier. La variable `age` retrace l'âge des personnes (minimum = 1, maximum = 116, Moyenne = 33.3), et la variable genre possède deux valeurs possibles (0 ou 1). Cette dernière est ainsi une variable binaire ou bouléenne.
+
+```{r dataset}
+str(df1)
+summary(df1)
+```
+
+```{r N_observations, results='hide', echo=FALSE}
+obs <- df1 %>% count()
+```
+
+Le dataset contient `r obs$n` observations.
+
+
+### Prétraitement : recodage de la variable `genre`
+
+Pour les besoins de l'exercice, la variable `genre` est recodée (en variable caractère) pour faire apparaître les deux genres "Homme et"Femme". Une nouvelle variable est ainsi crée : `genre_label`
+
+```{r}
+df1$genre_label <- ifelse(df1$genre == 0, "Femme", "Homme")
+str(df1)
+df1
+```
+
+
+## Distribution de `age` par séquences de 5 ans avec la fonction `cut`
+
+```{r age_by_5, message = FALSE, fig.height=7}
+
+# Utiliser la fonction cut pour couper l'âge des individus par séquences de cinq ans
+df1 <- df1 %>% 
+  mutate(age_group = cut(age, breaks = seq(0, 120, 5))) # la séquence est initiée 0 et finie à 120 pour éviter la présence de NA
+
+# Afficher la distribution des âges (pas de 5 ans)
+ggplot(df1, aes(x = age_group)) +
+  geom_bar(fill="steelblue") +
+  blue_theme() + 
+  xlab("Age") +
+  ylab("Nombre d'individus\n") +
+  ggtitle("Distribution des âges par séquence de 5 ans") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+
+```
+
+## Présentation de la distribution de `age` et `genre` sur un même graphique (sous la forme de deux subplots)
+### Les deux subplots ensemble
+
+```{r Fig_Sub, fig.height=5, fig.width=8}
+# Représenter la distribution des deux variables (âge et genre) sur un même graphique avec deux sous-graphiques
+# Subplot pour l'âge
+p1 <- ggplot(df1, aes(x = age)) +
+  geom_histogram(color="#e9ecef", fill="steelblue", binwidth=5) +
+  blue_theme() +
+  xlab("Age") +
+  ylab("Nombre d'individus") +
+  labs(subtitle = "Distribution des âges") 
+
+# Subplot pour le genre
+p2 <- ggplot(df1, aes(x = factor(genre_label), fill = genre_label)) +
+  geom_bar() +
+  blue_theme() +
+  xlab("Genre") +
+  ylab("\nNombre d'individus") +
+  labs(subtitle = "Distribution des genres") +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800")) +
+  theme(legend.position = "none")
+ 
+
+# Combinaison des deux subplots
+plot_grid(p1, p2, rel_widths = c(1.5, 1))
+
+```
+
+### Ajout d'un titre à la figure
+
+```{r 2SubPlot Title, fig.height=5, fig.width=8}
+#Ajouter un titre
+p1_p2_combined <- plot_grid(p1, p2, rel_widths = c(1.5, 1))
+
+grid.arrange(p1_p2_combined, top = text_grob("\n"),clip = FALSE)
+grid.text("Distribution de l'âge et du genre", x = 0.5, y = 0.95, hjust = 0.5, gp = gpar(fontsize = 14, fontface = "bold", col = "steelblue"))
+
+```
+
+```{r subplots va basic R}
+#Figure conjointe de deux graphiques indépendants (subplots)
+value_genre <- df1 %>%
+  group_by(genre_label) %>%
+  count()
+
+
+par(
+  mfrow=c(1,2),    # Configurer la fenêtre graphique pour afficher deux graphiques côte à côte 
+  mar=c(4,4,1,0)
+)
+
+hist(df1$age, col=rgb(1,0,0,0.5) , xlab="Age" , ylab="Nombre d'individus" , main="" )
+barplot(value_genre$n, beside = TRUE, col =  c("#00AFBB", "#E7B800"), # Couleurs manuelles pour les bars
+        xlab = "Genre", ylab = "Nombre d'individus",
+        names.arg = value_genre$genre_label)
+
+
+
+# Configurer les paramètres de la fenêtre graphique
+par(
+  mfrow = c(1, 2),     # Configurer la fenêtre graphique pour afficher deux graphiques côte à côte   
+  mar = c(4, 4, 3, 0)  # Augmenter la marge supérieure pour le titre général
+)
+
+# Tracer l'histogramme
+hist(df1$age, col = rgb(1, 0, 0, 0.5), xlab = "Age", ylab = "Nombre d'individus", main = "")
+
+# Tracer le barplot
+barplot(value_genre$n, beside = TRUE, col = c("#00AFBB", "#E7B800"), 
+        xlab = "Genre", ylab = "Nombre d'individus",
+        names.arg = value_genre$genre_label) 
+
+# Ajouter un titre général pour les deux graphiques
+title("Genre et age (distribution générale)", outer = TRUE, line = -1)  # 'outer = TRUE' indique que le titre doit être placé en dehors des deux graphiques
+
+```
+
+
+## Distribution de l'âge des individus par genre
+### Représantation avec une courbe pour les hommes et une courbe pour les femmes
+
+```{r}
+ggplot(df1, aes(x = age, y = after_stat(count), fill = genre_label)) +
+  geom_bar(position = position_dodge()) +
+  blue_theme() +
+  xlab("\nÂge") +
+  ylab("\nNombre d'individus\n") +
+  ggtitle("Distribution de l'âge par genre") +
+  scale_fill_manual(values = c("#00AFBB","#E7B800")) +    # Utiliser les couleurs spécifiées
+  scale_color_manual(values = c("#00AFBB","#E7B800")) +   # Utiliser les couleurs spécifiées
+  labs(fill = "") +
+  labs(color = "")
+
+```
+
+### Représentation avec courbe de densité et histogramme, sous condition de transparence
+
+```{r Fig_Cbe_Barres, message = FALSE, fig.height=5, fig.width=8}
+ggplot(df1, aes(x = age, y = after_stat(density))) +
+  geom_histogram(aes(fill = genre_label), position = position_dodge(),alpha = 0.5, binwidth = 5) +
+  geom_density(aes(y = after_stat(density), color = genre_label), linewidth = 0.75) +
+  blue_theme() +
+  xlab("\nÂge") +
+  ylab("\nDensité\n") +
+  ggtitle("Distribution de l'âge par genre") +
+  scale_fill_manual(values = c("#00AFBB","#E7B800")) +    # Utiliser les couleurs spécifiées
+  scale_color_manual(values = c("#00AFBB","#E7B800")) +   # Utiliser les couleurs spécifiées
+  labs(fill = "") +
+  labs(color = "")
+
+```
+
+```{r}
+ggplot(df1, aes(x = age, fill=genre_label)) +
+    geom_histogram( color="#e9ecef", alpha=0.5, position = 'identity', binwidth = 3) +
+    scale_fill_manual(values = c("#00AFBB","#E7B800")) + 
+    ggtitle("Distribution de l'âge par genre") +
+    labs(fill="") + 
+    blue_theme()
+```
+
+## Barplot de l'âge moyen des hommes et des femmes avec barre d'erreur (écart-type)
+```{r AgeMoyen_Sd}
+age_means <- df1 %>% 
+  group_by(genre_label) %>% 
+  summarize(mean_age = mean(age),
+            sd_age = sd(age))
+
+# Barplot avec barres d'erreur représentant l'écart-type
+ggplot(age_means, aes(x = genre_label, y = mean_age, fill = genre_label)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.5) +
+  geom_errorbar(aes(ymin = mean_age - sd_age, ymax = mean_age + sd_age), 
+                width = 0.2, position = position_dodge(width = 0.5)) +
+  blue_theme() +
+  xlab("Genre") +
+  ylab("Âge moyen") +
+  ggtitle("Age moyen par genre (avec barre d'erreur = écart-type)") +
+  scale_fill_manual(values = c("#00AFBB","#E7B800")) +
+  theme(legend.position = "none")
+
+```
+
+
+
+
+

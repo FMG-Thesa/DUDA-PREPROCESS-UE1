@@ -1,0 +1,988 @@
+---
+title: "Manipulation et prétraitement de données - UE1"
+subtitle: "Analyse d'un jeu de données réel"
+author: "Francisco Martin-Gomez"
+date: "juillet-août 2023"
+output:
+  html_document:
+    df_print: paged
+  theme: blue_theme
+  highlight: monochrome
+  toc: TRUE  # faire apparaître une TOC
+  toc_float:   
+      collapsed: false
+      smooth_scroll: false
+  toc_depth : 4 # profondeur de la table TOC
+  code_folding : hide  # cache par défaut les scripts R
+  number_sections : true # attribue un numéro aux chapitres et sections
+---
+
+
+```{r loading_packages, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(visdat)
+library(stringr)
+library(skimr)
+library(UpSetR)
+library(lubridate)
+library(naniar)
+library(tidyr)
+library(poppr)
+library(xtable)
+library(tidyverse)
+```
+
+
+```{r theme personnel}
+# Thème personnel
+blue_theme <- function() {
+  theme(
+    # add border
+    panel.border = element_rect(colour = "blue", fill = NA, linetype = 2),
+    # color background
+    panel.background = element_rect(fill = "aliceblue"),
+    # modify grid
+    panel.grid.major.x = element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y =  element_line(colour = "steelblue", linetype = 3, linewidth = 0.5),
+    panel.grid.minor.y = element_blank(),
+    # modify text, axis and colour
+    axis.text = element_text(colour = "steelblue", face = "italic"),
+    axis.title = element_text(colour = "steelblue"),
+    axis.ticks = element_line(colour = "steelblue"),
+    # text elements
+    plot.title = element_text(size = 16, face = 'bold', hjust = 0, vjust = 2, color="steelblue"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 9, hjust = 1),
+    # legend at the bottom
+    legend.position = "bottom"
+  )
+}
+
+```
+
+```{r Loading Datasets}
+# Chargement du jeu de données PhD_v2 (NB : impossible de trouver le df PhD_v1 sur Teams; le travail préalable sera effectué sur le v3)
+PhD_v3 <- read.csv("PhD_v3.csv", header=TRUE, fileEncoding="UTF-8")
+
+```
+
+## Identifier les données manquantes
+### Travail préalable sur PhD_v3
+```{r DataExplorer PhD_v2}
+# afficher le nombre de lignes
+nrow(PhD_v3)
+
+```
+ 
+```{r}
+# s'assurer que toutes les données sont bien chargées
+View(PhD_v3) # permet de vérifier visuellement que le tableau de données obtenues est cohérent et correspond à ce qu'on peut attendre
+skim(PhD_v3) # une combinaison de résultats sur la structure de la df
+
+
+```
+ 
+```{r}
+# retrait memoire
+rm(PhD_v3)
+```
+
+
+### Travail sur PhD_v2
+```{r}
+# Chargement du jeu de données PhD_v2
+PhD_v2 <- read.csv("PhD_v2.csv", header=TRUE, fileEncoding="UTF-8")
+```
+
+```{r}
+# visualiser les premières lignes du dataframe PhD_v2
+head(PhD_v2, 10)
+```
+
+```{r}
+# faire un résumé des différentes variables
+summary(PhD_v2)
+glimpse(PhD_v2)
+```
+
+```{r}
+# Exploration plus complète du dataset
+skim(PhD_v2)
+```
+
+
+```{r}
+## Dataset de travail
+PhD_v2b <- PhD_v2
+
+## Complétion du dataset : tranformation des valeurs vides ou empty ("") des variables de type "char" par NA
+
+PhD_v2b <- PhD_v2b %>% 
+  mutate_if(is.character, ~ str_trim(.)) %>%  # Supprime les espaces avant et après la chaîne
+  mutate_if(is.character, ~ na_if(., ""))     # Remplace les chaînes vides par NA
+
+## Correction des problèmes de typographie sur les NA (certaines étant inscrites en "na")
+PhD_v2b <- PhD_v2b %>% mutate_if(is.character, ~na_if(., "na"))
+
+```
+
+
+```{r}
+# Exploration de vérification
+skim(PhD_v2b)
+```
+
+
+
+```{r}
+# Exemple de méthodologie d'enquête
+## Complétion du dataset : récupération manuelle des valeurs manquantes pour la variable "Auteur" depuis theses.fr
+print(which(is.na(PhD_v2b$Auteur)))
+
+# Complétion du dataset
+PhD_v2b[302988, "Auteur"] <- "Yuxi Liu"
+PhD_v2b[315095, "Auteur"] <- "Han Chen"
+PhD_v2b[365528, "Auteur"] <- "Abd al-Rahman al-Suhaybani"
+
+```
+
+
+```{r}
+# calcul du nombre de doublon dans le df (ligne/observations 100% identiques)
+sum(duplicated(PhD_v2b))
+
+# affichage des lignes/observations concernées
+duplicated_rows <- PhD_v2b[duplicated(PhD_v2b), ]
+print(duplicated_rows)
+```
+
+
+```{r}
+# suppression des doublons
+PhD_v2b <- PhD_v2b[-c(81459, 102684, 149532, 447643), ]
+
+# Vérification
+sum(duplicated(PhD_v2b))
+```
+```{r}
+# Correction des types de variable : modification en date
+PhD_v2b$Date.de.premiere.inscription.en.doctorat <- as.Date(PhD_v2b$Date.de.premiere.inscription.en.doctorat, format="%Y-%m-%d")
+PhD_v2b$Date.de.soutenance <- as.Date(PhD_v2b$Date.de.soutenance, format="%Y-%m-%d")
+
+# Correction des types de variable : modification en variable catégorielle
+PhD_v2b <- PhD_v2b %>%
+  mutate_at(vars(Discipline, Statut), as.factor)
+
+```
+
+```{r}
+# Renommer les variables (en remplaçant les points par des espaces)
+PhD_v2b <- PhD_v2b %>%
+  rename_all(~str_replace_all(., "\\.", " "))
+
+# verification
+names(PhD_v2b)
+
+# Renommer les variables (suite)
+PhD_v2b <- PhD_v2b %>% 
+  rename("Directeur de these (nom prenom)" = "Directeur de these  nom prenom ", 
+         "Publication dans theses.fr" = "Publication dans theses fr", 
+         "Mise a jour dans theses.fr" = "Mise a jour dans theses fr")
+
+PhD_v2b <- PhD_v2b %>%
+  mutate(Statut = case_when(Statut == "enCours" ~ "en cours",
+                            Statut == "soutenue" ~ "soutenue"))
+
+# Afficher les premières lignes du nouveau dataframe
+head(PhD_v2b)
+```
+
+
+
+
+```{r fonction latex, echo=FALSE}
+# Fonction de tabulation de certaines données
+variable_details <- function(data) {
+  df <- data.frame(
+    Variable = names(data),
+    Nbr_NA = sapply(data, function(x) sum(is.na(x))),
+    Type = sapply(data, class)
+  )
+  
+  return(df)
+}
+
+tableau2 <- variable_details(PhD_v2b)
+print(tableau2)
+
+# Création du code latex
+latex_code <- xtable(tableau2)
+print(latex_code, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code, tableau2, variable_details)
+
+```
+
+
+```{r Donnees manquantes via Vismiss, fig.width=9}
+# Définir la hauteur et la largeur de la zone de tracé
+#options(repr.plot.width = 1024 / 72, repr.plot.height = 450 / 72)
+
+# Représenter les données manquantes du dataset
+vis <- vis_miss(PhD_v2b, show_perc_col = FALSE, warn_large_data = FALSE)
+
+# Augmenter les marges autour du graphique
+vis2 <- vis + theme(plot.margin = margin(0, 3, 0, 0, "cm")) + 
+  blue_theme()
+
+vis2
+
+# Sauvegarder le graphique au format PNG
+ggsave(filename = "vis_dat.png", plot = vis2)
+```
+
+
+```{r, message=FALSE}
+# Sélectionner les variables d'intérêt et convertir en format long
+
+selected_data <- PhD_v2b %>%
+  mutate(across(everything(), as.character)) %>% # retour au format caractère pour une fonction pivot qui marche
+  select("Statut", "Date de soutenance", "Langue de la these", "Identifiant auteur", "Identifiant directeur", "Date de premiere inscription en doctorat", "Identifiant etablissement") %>%
+  pivot_longer(-Statut, names_to = "variable", values_to = "value")# pas de variable "Year", puisqu'elle semble identique en corrélation à la variable "Date de soutenance"  
+
+
+# Calculer le pourcentage de valeurs manquantes pour chaque combinaison de Statut et de variable
+missing_data <- selected_data %>%
+  group_by(Statut, variable) %>%
+  summarise(missing = mean(is.na(value)))
+
+# Créer une heatmap
+ggplot(missing_data, aes(x = Statut, y = variable, fill = missing)) +
+  geom_tile() +
+  blue_theme() + 
+  scale_fill_gradient(low = "steelblue", high = "red") +
+  labs(x = "Statut", y = "Variable", fill = "Pourcentage de données manquantes")
+
+```
+
+```{r correlogramme UpsetR, fig.width=9, message=FALSE}
+# Sélectionner les variables d'intérêt
+selected_data2 <- PhD_v2b %>%
+  mutate(across(everything(), as.character)) %>%
+  select("Statut", "Date de soutenance", "Langue de la these", "Identifiant auteur", "Identifiant directeur", "Date de premiere inscription en doctorat") # pas de variable Year (puisqu'elle semble identique en corrélation à la variable "Date de soutenance" : extraction depuis Date de soutenance), ni de variable "Identifiant établissement" (pas de lien apparent entre les deux modalités enCours et soutenue) 
+
+# raccourcir les noms des variables
+selected_data2 <- selected_data2 %>%
+  rename(
+    Id_Aut = `Identifiant auteur`,
+    Date_1D = `Date de premiere inscription en doctorat`,
+    Date_Sou = `Date de soutenance`,
+    Langue = `Langue de la these`,
+    Id_Dir = `Identifiant directeur`
+  )
+
+# Afficher le corrélogramme
+gg_miss_upset(selected_data2)
+
+```
+
+
+```{r correlograme Visdat, fig.width=9, message = FALSE}
+# Alternative
+p4 <- gg_miss_fct(x = PhD_v2b, fct = Statut)
+p4b <- p4 + blue_theme() + theme(plot.margin = margin(0, 2, 0, 0, "cm")) + 
+  labs(x = "Statut", y = "Variable", fill = "% de données manquantes")
+p4b
+
+ggsave(filename = "NA_these.png", plot = p4b)
+```
+
+
+
+```{r, fig.height=7, fig.width=9, message=FALSE}
+# sélectionner les colonnes d'intérêt et créer une matrice binaire où 1 = NA et 0 = non-NA
+df_na <- PhD_v2b %>%
+  select("Identifiant auteur", 
+         "Date de premiere inscription en doctorat", "Date de soutenance", 
+         "Langue de la these", "Identifiant directeur") %>%
+  mutate_all(~as.numeric(is.na(.)))
+
+
+# Renommer les variables
+df_na <- df_na %>%
+  rename(
+    Date_1.Inscription.= `Date de premiere inscription en doctorat`
+   )
+
+# Calculer la matrice de corrélation et convertir en dataframe pour le tracé
+cor_df <- df_na %>%
+  cor() %>%
+  reshape2::melt()
+
+# Tracer le heatmap
+p3 <- ggplot(data = cor_df, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 3, color = "black") +  # Afficher les valeurs de corrélation
+  scale_fill_gradient2(low = "red", high = "steelblue", limit = c(-1,1), name = "Correlation") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1)) + 
+  theme_minimal() +
+  blue_theme() +
+  labs(x = "\nVariables", y = "Variables\n") +  # Titres des abscisses et des ordonnées
+  theme(axis.title.x = element_text(size = 12),
+        axis.title.y = element_text(size = 12)) + 
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p3
+
+ggsave(filename = "heatmap.png", plot = p3)
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Diviser le dataframe en fonction du Statut
+df_enCours <- PhD_v2b %>%
+  filter(Statut == "en cours") %>%
+  select("Identifiant auteur", 
+         "Date de premiere inscription en doctorat", "Date de soutenance", 
+         "Langue de la these", "Identifiant directeur") %>%
+  mutate_all(~as.numeric(is.na(.)))
+
+df_soutenue <- PhD_v2b %>%
+  filter(Statut == "soutenue") %>%
+  select("Identifiant auteur", 
+         "Date de premiere inscription en doctorat", "Date de soutenance", 
+         "Langue de la these", "Identifiant directeur") %>%
+  mutate_all(~as.numeric(is.na(.)))
+
+# Créer une fonction pour renommer les variables, calculer les corrélations et tracer le heatmap
+create_heatmap <- function(df, status) {
+  
+  # Renommer les variables
+  df <- df %>%
+    rename(
+      Id_Aut = `Identifiant auteur`,
+      Date_1D = `Date de premiere inscription en doctorat`,
+      Date_Sou = `Date de soutenance`,
+      Langue = `Langue de la these`,
+      Id_Dir = `Identifiant directeur`
+    )
+
+  # Calculer la matrice de corrélation et convertir en dataframe pour le tracé
+  cor_df <- df %>%
+    cor() %>%
+    reshape2::melt()
+
+  # Tracer le heatmap
+  ggplot(data = cor_df, aes(x = Var1, y = Var2, fill = value)) +
+    geom_tile() +
+    blue_theme() +
+    geom_text(aes(label = round(value, 2)), size = 3, color = "black") +  # Afficher les valeurs de corrélation
+    scale_fill_gradient2(low = "red", high = "steelblue", name = "Correlation", limit = c(-1,1)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1)) + 
+    labs(x = "\nVariables", y = "Variables\n") +  # Titres des abscisses et des ordonnées
+    theme(axis.title.x = element_text(size = 12),
+          axis.title.y = element_text(size = 12))
+}
+
+# Créer les deux heatmaps
+create_heatmap(df_enCours, "en cours")
+create_heatmap(df_soutenue, "soutenue")
+
+```
+
+
+```{r, fig.width=10, message=FALSE, warning=FALSE}
+# Création d'un df de travail composé des lignes entre 1984 et 2018
+Date_trav <- PhD_v2b %>% 
+  filter(Year >= "1984" & Year <= "2018")
+
+# Transformer en format date la variable "Date de soutenance"
+Date_trav$`Date de soutenance` <- dmy(Date_trav$`Date de soutenance`)
+
+# Extraire le mois et le jour 
+Date_trav <- Date_trav %>%
+  mutate(
+    Month = month(Date_trav$`Date de soutenance`), # extraire le mois dans une nouvelle colonne
+    Day = day(Date_trav$`Date de soutenance`) # extraire le jour dans  une nouvelle colonne
+  )
+
+# Convertir le mois en facteur pour un affichage correct sur le graphique
+Date_trav$Month <- factor(Date_trav$Month, levels = 1:12,
+                              labels = c("Jan", "Fev", "Mar", "Avr", "Mai", "Jui", 
+                                         "Juil", "Aou", "Sep", "Oct", "Nov", "Dec"))
+
+p5 <- ggplot(Date_trav, aes(x = Month)) +
+  geom_bar(fill = "steelblue") +
+  labs(x = "Mois", y = "Nombre de thèses soutenues") +
+  blue_theme()
+p5
+
+ggsave(filename = "distSout_init.png", plot = p5)
+
+```
+
+
+
+
+```{r, fig.height=25, fig.width=10, warning=FALSE}
+# Création d'un df de travail composé des lignes entre 1984 et 2018
+Date_trav2 <- PhD_v2b %>% 
+  filter(Year >= "2005" & Year <= "2018")
+
+# Transformer en format date la variable "Date de soutenance"
+Date_trav2$`Date de soutenance` <- dmy(Date_trav2$`Date de soutenance`)
+
+# Extraire le mois et le jour 
+Date_trav2 <- Date_trav2 %>%
+  mutate(
+    Month = month(Date_trav2$`Date de soutenance`), # extraire le mois dans une nouvelle colonne
+    Day = day(Date_trav2$`Date de soutenance`) # extraire le jour dans  une nouvelle colonne
+  )
+
+# Convertir le mois en facteur pour un affichage correct sur le graphique
+Date_trav2$Month <- factor(Date_trav2$Month, levels = 1:12,
+                              labels = c("Jan", "Fev", "Mar", "Avr", "Mai", "Jui", 
+                                         "Juil", "Aou", "Sep", "Oct", "Nov", "Dec"))
+
+these_ym <- Date_trav2 %>%
+  group_by(Year, Month) %>%
+  count() 
+
+names(these_ym) <- c("Annee", "Mois", "Tot.mois")
+
+# Créer le graphique
+ggplot(these_ym, aes(x = Mois, y = Tot.mois)) +
+  geom_histogram(stat = "identity", fill = "steelblue") +
+  labs(x = "Mois", y = "Nombre de thèses", 
+       title = "Distribution du nombre de thèses soutenues par mois et année") +
+  facet_wrap(vars(Annee), ncol = 2, drop = FALSE) + 
+  theme(
+      panel.spacing = unit(1, "lines"),
+      strip.text.x = element_text(size = 9)
+    ) +
+  blue_theme()
+
+ 
+```
+
+
+
+```{r, warning=FALSE, message=FALSE, height=20, fig.width=10}
+# Création df intermédiaire par année
+these_y <- Date_trav2 %>%
+  group_by(Year) %>%
+  count() 
+
+names(these_y) <- c("Annee", "Tot.an") # renommer les colonnes
+
+# Merge de deux tables intermédiaires pour réaliser les calculs des proportions
+these_tot_y.ym <- full_join(these_ym, these_y, by = "Annee")
+
+# Calcul des proportions mensuelles par années
+these_tot_y.ym <- these_tot_y.ym %>%
+  mutate(ym.sum.perc = round((Tot.mois / Tot.an)*100, 2))
+
+# Create plot
+p6 <- ggplot(these_tot_y.ym, aes(x = Mois, y = ym.sum.perc)) +
+  geom_histogram(stat = "identity", fill = "steelblue", binwidth = 5) +
+  labs(x = "Mois", y = "Nombre de thèses") +
+  facet_wrap(vars(Annee), ncol = 3, drop = FALSE) + 
+   theme(
+      panel.spacing = unit(1, "lines"),
+      strip.text.x = element_text(size = 9)
+    ) + 
+  blue_theme()
+
+p6
+
+ggsave(filename = "distSout_mois.png", plot = p6)
+
+```
+
+
+```{r, fig.width=10, message=FALSE}
+# Calculs de la moyenne et de l'écart-type
+these_tot_y.ym2 <- these_tot_y.ym %>%
+  group_by(Mois) %>%
+  summarise(
+    mean_perc = mean(ym.sum.perc, na.rm = TRUE),
+    sd = sd(ym.sum.perc, na.rm = TRUE)
+  )
+
+# Create plot de la Proportion mensuelle des soutenances de thèses entre 2005 et 2018 - avec 01/01
+p7 <- ggplot(these_tot_y.ym2, aes(x = Mois, y = mean_perc)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_errorbar(aes(ymin = mean_perc - sd, ymax = mean_perc + sd), width = 0.2) +
+  labs(x = "Mois", y = "Proportion de thèses (%)") +
+  blue_theme()
+
+p7
+
+ggsave(filename = "distSout_moisCor.png", plot = p7)
+
+```
+
+
+```{r, fig.width=10, fig.height=6, warning=FALSE, message=FALSE}
+# Filtrer le mois de janvier
+these_tot_y.ym_jan <- these_tot_y.ym %>%
+  filter(Mois == "Jan")
+
+# Calcul des proportions mensuelles par années
+these_tot_y.ym_jan <- these_tot_y.ym_jan %>%
+  mutate(ym.sum.perc = round((Tot.mois / Tot.an)*100, 2))
+
+# Créer plot 
+p8 <- ggplot(these_tot_y.ym_jan, aes(x = Annee, y = ym.sum.perc)) +
+  geom_line(color = "steelblue", size = 1.05) +
+  labs(x = "Années", y = "Proportion du nombre de thèses (%)") + 
+  blue_theme()
+
+# Determine the start and end points
+start_point <- these_tot_y.ym_jan %>% filter(Annee == 2005)
+end_point <- these_tot_y.ym_jan %>% filter(Annee == 2018)
+
+# Add labels to the start and end points
+p8 <- p8 + geom_text(data=start_point, aes(label=paste0(ym.sum.perc, "%")), vjust=-0.75, color = "steelblue", size = 3)
+p8 <- p8 + geom_text(data=end_point, aes(label=paste0(ym.sum.perc, "%")), vjust=-1, color = "steelblue", size = 3)
+
+print(p8)
+
+ggsave(filename = "distSout_moisJanvCor.png", plot = p8)
+
+```
+
+```{r, fig.width=10, fig.height=6, message=FALSE}
+# Sélection des observations pour le 01 janvier et comptage des effectifs
+jan_01_df <- Date_trav2 %>% 
+  filter(Month=="Jan" & Day == 1) %>%
+  group_by(Year) %>% 
+  count()
+
+# Changment de noms des variables pour préparer la jointure
+colnames(jan_01_df) <- c("Annee", "Tot_01_jan")
+
+# jointure : ajout des effectifs totaux de thèses par années
+jan_01_df <- full_join(jan_01_df, these_y, by = "Annee")
+
+# Calcul des proportions  du 01_jan par année de soutenance
+jan_01_df <- jan_01_df %>%
+  mutate(jan_01_df.sum.perc = round((Tot_01_jan / Tot.an)*100, 2))
+
+# Affichage de la courbe
+p9 <- ggplot(jan_01_df, aes(x = Annee, y = jan_01_df.sum.perc)) +
+  geom_line(color = "steelblue", linewidth = 1.09) +
+  labs(x = "Années", y = "Proportion du nombre de thèses soutenue au 01/01 (%)") + 
+  blue_theme()
+
+# Determiner les valeurs de départ et d'arrivée
+start_point <- jan_01_df %>% filter(Annee == 2005)
+end_point <- jan_01_df %>% filter(Annee == 2018)
+
+# Ajouter les annotation/labels
+p9 <- p9 + geom_text(data=start_point, aes(label=paste0(jan_01_df.sum.perc, "%")), vjust=-0.75, color = "steelblue", size = 3)
+p9 <- p9 + geom_text(data=end_point, aes(label=paste0(jan_01_df.sum.perc, "%")), vjust=-1, color = "steelblue", size = 3)
+
+print(p9)
+
+ggsave(filename = "distSout_mois0101.png", plot = p9)
+
+```
+
+
+```{r}
+tableau <- jan_01_df[, c(1:3)]
+
+# Création du code latex
+latex_code <- xtable(tableau)
+print(latex_code, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code, tableau)
+```
+
+
+
+```{r, fig.width=10, fig.height=6, message=FALSE}
+no_jan_01_df <- Date_trav2 %>% 
+  filter(!(Month == "Jan" & Day ==  1)) 
+
+no_jan_01_df_ym <- no_jan_01_df %>%
+  group_by(Year, Month)%>%
+  count()
+names(no_jan_01_df_ym) <- c("Annee", "Mois", "Tot.mois") # renommer les colonnes 
+
+no_jan_01_df_y <- no_jan_01_df  %>%
+  group_by(Year) %>%
+  count()
+names(no_jan_01_df_y) <- c("Annee", "Tot.an") # renommer les colonnes
+
+
+no_jan_01_y.ym <- full_join(no_jan_01_df_ym, no_jan_01_df_y,  by = "Annee")
+  
+no_jan_01_y.ym <- no_jan_01_y.ym %>%
+  mutate(
+    no_jan_01_y.ym_sum.perc = round((Tot.mois / Tot.an)*100, 2))
+
+
+# Calculs de la moyenne et de l'écart-type
+no_jan_01_y.ym2 <- no_jan_01_y.ym  %>%
+  group_by(Mois) %>%
+  summarise(
+    mean_perc = mean(no_jan_01_y.ym_sum.perc, na.rm = TRUE),
+    sd = sd(no_jan_01_y.ym_sum.perc, na.rm = TRUE)
+  )
+
+# Create plot
+p10 <- ggplot(no_jan_01_y.ym2, aes(x = Mois, y = mean_perc)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_errorbar(aes(ymin = mean_perc - sd, ymax = mean_perc + sd), width = 0.2) +
+  labs(x = "Mois", y = "Proportion de thèses (%)") +
+  blue_theme()
+
+print(p10)
+
+ggsave(filename = "distSout_CorDef.png", plot = p10)
+```
+
+```{r}
+# Isoler les occurences Cecile Martin
+cec.mar_df <- Date_trav %>%
+  mutate(Auteur = tolower(Auteur)) %>% # Mettre en minusculepour faciliter les traitements
+  filter(Auteur == "cecile martin") %>%
+   select(Auteur, 'Identifiant auteur', Year, Discipline, 'Identifiant de la these')
+
+# Isoler les lignes avec le même identifiant Auteur 
+cec.mar_df1 <- cec.mar_df %>%
+  filter(`Identifiant auteur` == 81323557) %>%
+  select(Auteur, 'Identifiant auteur', Year, Discipline, 'Identifiant de la these')
+
+
+print(cec.mar_df)
+print(cec.mar_df1)
+
+
+
+```
+
+```{r, include=FALSE}
+# Création du code latex
+latex_code1 <- xtable(cec.mar_df)
+print(latex_code1, type = "latex", include.rownames = FALSE)
+
+# Création du code latex
+latex_code2 <- xtable(cec.mar_df1)
+print(latex_code2, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code, cec.mar_df1, cec.mar_df)
+```
+
+
+# 3. Détection d'outliers
+```{r dataset superviseur}
+# Création du dataset comprenant les variables d'intérêt
+directeurs_df <- Date_trav %>%
+  select(`Identifiant de la these`, `Directeur de these (nom prenom)`, 'Identifiant directeur', Titre, Year, 'Identifiant etablissement', 'Discipline')
+
+# Modifier la variable "Directeur de these (nom prenom)" pour en faciliter la manipulation (Fonction modify)  
+modify <- function(x) {
+  # Supprimer toute la ponctuation
+  no_punct <- stringr::str_replace_all(x, "[[:punct:]]", " ")
+
+  # Supprimer les espaces supplémentaires
+  no_extra_spaces <- gsub("\\s+", " ", no_punct)
+
+  # Supprimer les espaces de début et de fin
+  trimmed <- str_trim(no_extra_spaces)
+
+  # Convertir tout le texte en minuscules
+  lower_case <- tolower(trimmed)
+
+  # Renvoyer le résultat
+  return(lower_case)
+}
+
+directeurs_df_modified <- directeurs_df %>%
+  separate_rows(`Directeur de these (nom prenom)`, sep = ",") %>% # permet d'obtenir une ligne par directeur et co-directeur
+  mutate(`Directeur de these (nom prenom)` = modify(`Directeur de these (nom prenom)`)) %>%
+  filter(`Directeur de these (nom prenom)` != "") %>%
+  filter(!str_detect(`Directeur de these (nom prenom)`, "^[0-9]+$")) %>% # ignore les suites de chiffres
+  filter(!`Directeur de these (nom prenom)` %in% c("de", "la", "du", "des")) # ignore les particules
+  
+  
+# Regrouper par directeur
+these.enc.tot <- directeurs_df_modified %>% group_by(`Directeur de these (nom prenom)`) %>%
+summarise(`Nombre de these encadrees` = n())
+
+these.enc.tot <- these.enc.tot %>%
+  mutate(`Directeur de these (nom prenom)` = replace(`Directeur de these (nom prenom)`,
+                                                     `Directeur de these (nom prenom)` == "directeur de these inconnu",
+                                                     NA))
+these.enc.tot2 <- these.enc.tot %>%
+  filter(!is.na(`Directeur de these (nom prenom)`))
+
+```
+
+```{r Sup100 superviseur}
+## Top sup100 des directeurs avec le plus grand nombre de thèses encadrées
+top.sup100_directeurs <- these.enc.tot2 %>%
+  filter(`Nombre de these encadrees` >= 100) %>%
+  arrange(desc(`Nombre de these encadrees`))
+
+
+# Afficher le tableau (thèses > 100/directeurs)
+print(top.sup100_directeurs)
+```
+
+
+```{r, include=FALSE}
+# Création du code latex
+latex_code <- xtable(top.sup100_directeurs)
+print(latex_code1, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code)
+```
+
+```{r graph Sup100, message=FALSE}
+# afficher un graphique (sup100 directeurs)
+p11 <- ggplot(top.sup100_directeurs, aes(x = reorder(`Directeur de these (nom prenom)`, `Nombre de these encadrees`), y = `Nombre de these encadrees`)) +
+geom_bar(stat = "identity", fill="steelblue") +
+  geom_text(aes(label = `Nombre de these encadrees`), hjust = 1.25, size=3, color="white") +
+  coord_flip() + # Pour faire un barplot horizontal
+  labs(x = "Directeurs", y = "Nombre de thèses encadrées") +
+  blue_theme()
+p11
+
+ggsave(filename = "sup100_Dir.png", plot = p11)
+```
+
+
+```{r top 10, message=FALSE}
+# créer le dataset top 10 (10 premiers directeurs)
+top.10_directeurs <- these.enc.tot2 %>%
+  arrange(desc(`Nombre de these encadrees`)) %>%
+  head(10)
+
+# afficher un graphique (top 10 directeurs)
+p12 <- ggplot(top.10_directeurs, aes(x = reorder(`Directeur de these (nom prenom)`, `Nombre de these encadrees`), y = `Nombre de these encadrees`)) +
+geom_bar(stat = "identity", fill="steelblue") +
+  geom_text(aes(label = `Nombre de these encadrees`), hjust = 1.25, size=3, color="white") +
+  coord_flip() + # Pour faire un barplot horizontal
+  labs(x = "Directeurs", y = "Nombre de thèses encadrées") +
+  blue_theme()
+p12
+
+ggsave(filename = "top10_dir.png", plot = p12)
+```
+
+```{r blanc francois paul, message=FALSE}
+bfp_df <- directeurs_df_modified %>%
+  select(`Identifiant de la these`, `Directeur de these (nom prenom)`, "Year", `Identifiant etablissement`, `Discipline`) %>%
+  filter(`Directeur de these (nom prenom)` == "blanc francois paul")
+
+bfp_df <- bfp_df %>%
+  group_by(Year, Discipline, `Identifiant etablissement`) %>%
+  summarise("Nombre de theses" = n()) %>%
+  arrange(desc(`Nombre de theses`)) %>%
+  head(15)
+```
+
+
+```{r, include=FALSE}
+# Création du code latex
+latex_code <- xtable(bfp_df)
+print(latex_code, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code, bfp_df)
+```
+
+
+
+
+
+
+
+## 3. Détection d'outliers : éléments complémentaires pour l'enquête
+```{r enquete identifiant directeur1, fig.width=10, warning=FALSE}
+
+## Isoler les variables d'intérêts : le cas des ID des directeurs versus le nom-prenom 
+na_count_ID.Dir <- sum(is.na(Date_trav$'Identifiant directeur'))
+na_count_Nom.Pren <- sum(is.na(Date_trav$'Directeur de these (nom prenom)'))
+
+perc_miss.ID.Dir <- round((na_count_ID.Dir / nrow(Date_trav)) * 100, 2)
+perc_miss.Nom.Pren <- round((na_count_Nom.Pren / nrow(Date_trav)) * 100, 2)
+
+### Création du tableau de résultats
+tab.result_NA <- data.frame(
+  `Nombre de NA` = c(na_count_ID.Dir, na_count_Nom.Pren),
+  `Pourcentage de NA` = c(perc_miss.ID.Dir, perc_miss.Nom.Pren)
+)
+
+### Ajout des noms de lignes
+row.names(tab.result_NA) <- c("Identifiant directeur", "Directeur de these (nom prenom)")
+colnames(tab.result_NA) <- c("Nombre de NA", "Pourcentage de NA")
+
+### Affichage du tableau
+print(tab.result_NA)
+
+```
+
+
+```{r, include=FALSE}
+# Création du code latex
+latex_code <- xtable(tab.result_NA)
+print(latex_code, type = "latex", include.rownames = TRUE)
+
+# décharge de la mémoire
+rm(latex_code)
+```
+
+
+```{r enquete identifiant directeur2}
+# Créer une nouvelle colonne indiquant si la thèse est co-dirigée
+Date_trav <- Date_trav %>%
+  mutate(co.dir = str_detect(`Directeur de these (nom prenom)`, ","))
+
+# Compter le nombre de thèses co-dirigées
+num_co.dir <- sum(Date_trav$co.dir, na.rm = TRUE)
+
+print(num_co.dir)
+
+# Compter le nombre total de thèses (ignorer les NA)
+total_theses <- sum(!is.na(Date_trav$co.dir))
+
+# Calculer le pourcentage
+perc_co.dir <- round((num_co.dir / total_theses) * 100, 2)
+
+print(perc_co.dir)
+
+```
+
+
+## 3. Détection d'outliers : éléments complémentaires pour l'enquête (Outliers ou pas?) 
+```{r, fig.width=10, warning=FALSE}
+## Outliers: approche standard (règle de l'interquartile)
+stats <- these.enc.tot2 %>%
+  summarise(Q1 = quantile(`Nombre de these encadrees`, 0.25),
+            Q3 = quantile(`Nombre de these encadrees`, 0.75)) %>%
+  mutate(IQR = Q3 - Q1,
+         upper = Q3 + 1.5 * IQR,
+         lower = Q1 - 1.5 * IQR)
+
+print(stats)
+
+```
+
+
+```{r, include=FALSE}
+# Création du code latex
+latex_code <- xtable(stats)
+print(latex_code, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code)
+```
+
+
+
+```{r, fig.width=10, warning=FALSE, message=FALSE}
+# Liste des encadrants "aberrants" (all)
+outlier_directeurs.tot <- these.enc.tot2 %>%
+  filter(`Nombre de these encadrees` > stats$upper | `Nombre de these encadrees` < stats$lower)
+
+# Calculer Q3
+Q3_value <- quantile(these.enc.tot2$`Nombre de these encadrees`, 0.75)
+
+p13 <- ggplot(these.enc.tot2, aes(x = `Nombre de these encadrees`)) +
+  geom_histogram(color="#e9ecef", fill="steelblue", binwidth=2) +
+  scale_x_continuous(breaks = seq(min(these.enc.tot2$`Nombre de these encadrees`), 
+                                   max(these.enc.tot2$`Nombre de these encadrees`), by = 5)) +
+  geom_vline(aes(xintercept=Q3_value), color="red", linetype="dashed") + # ligne pour le Q3
+  xlab("Nombre de thèses encadrées") +
+  ylab("Nombre d'individus") +
+  labs(subtitle = "Distribution des nombres de thèses encadrées")
+p13
+
+ggsave(filename = "75per_these.png", plot = p13)
+```
+
+
+
+# Résultats préliminaires
+```{r, message=FALSE}
+# Filtrer les données pour garder seulement les années entre 2001 et 2018
+Date_trav3 <- Date_trav %>%
+  filter(Year >= "2001" & Year <= "2018")
+
+# Ajouter une nouvelle colonne 'Language.rec' basée sur la colonne 'Langue de la thèse'
+Date_trav3 <- Date_trav3 %>%
+  mutate(Language.rec = case_when(
+    is.na(`Langue de la these`) ~ "NA",       # Gérer les valeurs manquantes
+    `Langue de la these` == "en" ~ "Anglais", # Thèses en anglais
+    `Langue de la these` == "fr" ~ "Français",# Thèses en français
+    `Langue de la these` == "enfr" ~ "Bilingue", # Thèses bilingues
+    `Langue de la these` == "fren" ~ "Bilingue", # Thèses bilingues
+    TRUE ~ "Autre"                            # Toutes les autres langues
+  ))
+
+
+# Ordonner les niveaux de la variable 'Language.rec' selon la préférence
+Date_trav3$Language.rec <- factor(Date_trav3$Language.rec, levels = c("Autre", "Bilingue", "Anglais", "Français"))
+
+# Compter le nombre de thèses pour chaque combinaison Année-Langue
+language_count_df <- Date_trav3 %>% 
+  group_by(Year, Language.rec) %>% 
+  summarise(n = n(), .groups = "drop") %>%
+  arrange(Language.rec)
+
+
+# Créer le graphique
+p14 <- ggplot(language_count_df, aes(x = Year, y = n, fill = Language.rec)) +
+  geom_area(position = "stack") +
+  labs(x = "Date", y = "Pourcentage de thèses soutenues", fill = "Language") +
+  blue_theme() +   # Utiliser le thème minimal de ggplot2
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p14
+
+ggsave(filename = "lang_rec.png", plot = p14)
+
+```
+
+```{r message=FALSE}
+# Créer le graphique en %
+p15 <- ggplot(language_count_df, aes(x = Year, y = n, fill = Language.rec)) +
+  geom_area(position = "fill") +
+  labs(x = "Date", y = "Pourcentage de thèses soutenues", fill = "Language") +
+  blue_theme() +   # Utiliser le thème minimal de ggplot2
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p15
+
+ggsave(filename = "lang_rec2.png", plot = p15)
+
+```
+```{r}
+# Supplément tableau pour rapport
+language_count_df2 <- Date_trav3 %>%
+  filter(Year %in% c(2001, 2010, 2018)) %>%
+  group_by(Year, Language.rec) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  arrange(Year, Language.rec)
+
+# Création du code latex
+latex_code <- xtable(language_count_df2)
+print(latex_code, type = "latex", include.rownames = FALSE)
+
+# décharge de la mémoire
+rm(latex_code)
+```
+
+
+
